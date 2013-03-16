@@ -285,13 +285,15 @@ function addcompletions()
         return
     fi
 
-    dir="sdk/bash_completion"
+    dirs="sdk/bash_completion vendor/bliss/bash_completion"
+    for dir in $dirs; do
     if [ -d ${dir} ]; then
         for f in `/bin/ls ${dir}/[a-z]*.bash 2> /dev/null`; do
             echo "including $f"
             . $f
         done
     fi
+    done
 }
 
 function choosetype()
@@ -486,7 +488,7 @@ function print_lunch_menu()
        echo "  (ohai, koush!)"
     fi
     echo
-    if [ "z${SLIM_DEVICES_ONLY}" != "z" ]; then
+    if [ "z${BLISS_DEVICES_ONLY}" != "z" ]; then
        echo "Breakfast menu... pick a combo:"
     else
        echo "Lunch menu... pick a combo:"
@@ -500,7 +502,7 @@ function print_lunch_menu()
         i=$(($i+1))
     done
 
-    if [ "z${SLIM_DEVICES_ONLY}" != "z" ]; then
+    if [ "z${BLISS_DEVICES_ONLY}" != "z" ]; then
        echo "... and don't forget the bacon!"
     fi
 
@@ -522,10 +524,10 @@ function brunch()
 function breakfast()
 {
     target=$1
-    SLIM_DEVICES_ONLY="true"
+    BLISS_DEVICES_ONLY="true"
     unset LUNCH_MENU_CHOICES
     add_lunch_combo full-eng
-    for f in `/bin/ls vendor/slim/vendorsetup.sh 2> /dev/null`
+    for f in `/bin/ls vendor/bliss/vendorsetup.sh 2> /dev/null`
         do
             echo "including $f"
             . $f
@@ -542,7 +544,7 @@ function breakfast()
             lunch $target
         else
             # This is probably just the CM model name
-            lunch slim_$target-userdebug
+            lunch bliss_$target-userdebug
         fi
     fi
     return $?
@@ -591,7 +593,7 @@ function lunch()
     check_product $product
     if [ $? -ne 0 ]
     then
-        # if we can't find a product, try to grab it off the SLIM github
+        # if we can't find a product, try to grab it off the bliss github
         T=$(gettop)
         pushd $T > /dev/null
         build/tools/roomservice.py $product
