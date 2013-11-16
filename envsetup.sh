@@ -25,11 +25,8 @@ Invoke ". build/envsetup.sh" from your shell to add the following functions to y
 - cmremote: Add git remote for CM Gerrit Review
 - cmgerrit: A Git wrapper that fetches/pushes patch from/to CM Gerrit Review
 - cmrebase: Rebase a Gerrit change and push it again
-<<<<<<< HEAD
-=======
 - aospremote: Add git remote for matching AOSP repository
 - cafremote: Add git remote for matching CodeAurora repository.
->>>>>>> b77e10e... build: Add cafremote command to envsetup
 - mka:      Builds using SCHED_BATCH on all processors
 - reposync: Parallel repo sync using ionice and SCHED_BATCH
 - installboot: Installs a boot.img to the connected device.
@@ -1586,6 +1583,24 @@ function cmremote()
 }
 export -f cmremote
 
+function aospremote()
+{
+    git remote rm aosp 2> /dev/null
+    if [ ! -d .git ]
+    then
+        echo .git directory not found. Please run this from the root directory of the Android repository you wish to set up.
+    fi
+    PROJECT=`pwd -P | sed s#$ANDROID_BUILD_TOP/##g`
+    if (echo $PROJECT | grep -qv "^device")
+    then
+        PFX="platform/"
+    fi
+    git remote add aosp https://android.googlesource.com/$PFX$PROJECT
+    echo "Remote 'aosp' created"
+}
+export -f aospremote
+
+
 function makerecipe() {
   if [ -z "$1" ]
   then
@@ -1934,7 +1949,7 @@ function cafremote()
     then
         echo .git directory not found. Please run this from the root directory of the Android repository you wish to set up.
     fi
-    PROJECT=`pwd | sed s#$ANDROID_BUILD_TOP/##g`
+    PROJECT=`pwd -P | sed s#$ANDROID_BUILD_TOP/##g`
     if (echo $PROJECT | grep -qv "^device")
     then
         PFX="platform/"
