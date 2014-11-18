@@ -812,12 +812,9 @@ recovery_sepolicy := $(call intermediates-dir-for,ETC,sepolicy.recovery)/sepolic
 recovery_kernel := $(INSTALLED_KERNEL_TARGET) # same as a non-recovery system
 recovery_ramdisk := $(PRODUCT_OUT)/ramdisk-recovery.img
 recovery_build_prop := $(intermediate_system_build_prop)
-<<<<<<< HEAD
-recovery_resources_common := $(call include-path-for, recovery)/res
-=======
+recovery_uncompressed_ramdisk := $(PRODUCT_OUT)/ramdisk-recovery.cpio
 recovery_uncompressed_ramdisk := $(PRODUCT_OUT)/ramdisk-recovery.cpio
 recovery_resources_common := $(call project-path-for,recovery)/res
->>>>>>> a1fc2bb... build: Use project pathmap for recovery
 
 # Set recovery_density to the density bucket of the device.
 recovery_density := unknown
@@ -1446,14 +1443,12 @@ built_ota_tools := \
 	$(call intermediates-dir-for,EXECUTABLES,applypatch,,,$(TARGET_PREFER_32_BIT))/applypatch \
 	$(call intermediates-dir-for,EXECUTABLES,applypatch_static,,,$(TARGET_PREFER_32_BIT))/applypatch_static \
 	$(call intermediates-dir-for,EXECUTABLES,check_prereq,,,$(TARGET_PREFER_32_BIT))/check_prereq \
-	$(call intermediates-dir-for,EXECUTABLES,sqlite3,,,$(TARGET_PREFER_32_BIT))/sqlite3 \
 
 ifeq ($(TARGET_ARCH),arm64)
-built_ota_tools += $(call intermediates-dir-for,EXECUTABLES,updater,,,32)/updater
+	built_ota_tools += $(call intermediates-dir-for,EXECUTABLES,updater,,,32)/updater
 else
-built_ota_tools += $(call intermediates-dir-for,EXECUTABLES,updater)/updater
+	built_ota_tools += $(call intermediates-dir-for,EXECUTABLES,updater)/updater
 endif
-
 $(BUILT_TARGET_FILES_PACKAGE): PRIVATE_OTA_TOOLS := $(built_ota_tools)
 
 $(BUILT_TARGET_FILES_PACKAGE): PRIVATE_RECOVERY_API_VERSION := $(RECOVERY_API_VERSION)
