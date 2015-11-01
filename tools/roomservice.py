@@ -38,11 +38,11 @@ default_rem = "github"
 default_rev = "marshmallow"
 # set this to the remote that you use for projects from your team repos
 # example fetch="https://github.com/BenzoRom"
-default_team_rem = "BenzoRom"
+default_team_rem = "bliss"
 # this shouldn't change unless google makes changes
 local_manifest_dir = ".repo/local_manifests"
 # change this to your name on github (or equivalent hosting)
-android_team = "BenzoRom"
+android_team = "BlissRoms-AOSP"
 
 
 def check_repo_exists(git_data):
@@ -205,7 +205,7 @@ def parse_device_from_folder(device):
 
 
 def parse_dependency_file(location):
-    dep_file = "benzo.dependencies"
+    dep_file = "bliss.dependencies"
     dep_location = '/'.join([location, dep_file])
     if not os.path.isfile(dep_location):
         print("WARNING: %s file not found" % dep_location)
