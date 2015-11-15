@@ -179,16 +179,22 @@ include $(BUILD_SYSTEM)/node_fns.mk
 include $(BUILD_SYSTEM)/product.mk
 include $(BUILD_SYSTEM)/device.mk
 
-ifneq ($(strip $(TARGET_BUILD_APPS)),)
-# An unbundled app build needs only the core product makefiles.
-all_product_configs := $(call get-product-makefiles,\
-    $(SRC_TARGET_DIR)/product/AndroidProducts.mk)
+# A BLISS build needs only the BLISS product makefiles.
+ifneq ($(BLISS_BUILD),)
+  all_product_configs := $(shell find device -path "*/$(BLISS_BUILD)/bliss.mk")
 else
-# Read in all of the product definitions specified by the AndroidProducts.mk
-# files in the tree.
-all_product_configs := $(get-all-product-makefiles)
-endif
+  ifneq ($(strip $(TARGET_BUILD_APPS)),)
+  # An unbundled app build needs only the core product makefiles.
+  all_product_configs := $(call get-product-makefiles,\
+      $(SRC_TARGET_DIR)/product/AndroidProducts.mk)
+  else
+    # Read in all of the product definitions specified by the AndroidProducts.mk
+    # files in the tree.
+    all_product_configs := $(get-all-product-makefiles)
+  endif # TARGET_BUILD_APPS
+endif # BLISS_BUILD
 
+ifeq ($(BLISS_BUILD),)
 # Find the product config makefile for the current product.
 # all_product_configs consists items like:
 # <product_name>:<path_to_the_product_makefile>
@@ -207,11 +213,17 @@ $(foreach f, $(all_product_configs),\
         $(eval all_product_makefiles += $(f))\
         $(if $(filter $(TARGET_PRODUCT),$(basename $(notdir $(f)))),\
             $(eval current_product_makefile += $(f)),)))
+
 _cpm_words :=
 _cpm_word1 :=
 _cpm_word2 :=
+else
+    current_product_makefile := $(strip $(all_product_configs))
+    all_product_makefiles := $(strip $(all_product_configs))
+endif
 current_product_makefile := $(strip $(current_product_makefile))
 all_product_makefiles := $(strip $(all_product_makefiles))
+
 
 ifneq (,$(filter product-graph dump-products, $(MAKECMDGOALS)))
 # Import all product makefiles.
@@ -246,6 +258,38 @@ current_product_makefile :=
 all_product_makefiles :=
 all_product_configs :=
 
+
+#############################################################################
+# TODO: Remove this hack once only 1 runtime is left.
+# Include the runtime product makefile based on the product's PRODUCT_RUNTIMES
+$(call clear-var-list, $(_product_var_list))
+
+# Set PRODUCT_RUNTIMES, allowing buildspec to override using OVERRIDE_RUNTIMES
+product_runtimes := $(sort $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_RUNTIMES))
+ifneq ($(OVERRIDE_RUNTIMES),)
+  $(info Overriding PRODUCT_RUNTIMES=$(product_runtimes) with $(OVERRIDE_RUNTIMES))
+  product_runtimes := $(OVERRIDE_RUNTIMES)
+endif
+$(foreach runtime, $(product_runtimes), $(eval include $(SRC_TARGET_DIR)/product/$(runtime).mk))
+$(foreach v, $(_product_var_list), $(if $($(v)),\
+    $(eval PRODUCTS.$(INTERNAL_PRODUCT).$(v) += $(sort $($(v))))))
+
+$(call clear-var-list, $(_product_var_list))
+# Now we can assign to PRODUCT_RUNTIMES
+PRODUCT_RUNTIMES := $(product_runtimes)
+product_runtimes :=
+
+PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PROPERTY_OVERRIDES += persist.sys.dalvik.vm.lib.2=$(DALVIK_VM_LIB)
+
+ifeq ($(DEX_PREOPT_DEFAULT),)
+  ifeq ($(words $(PRODUCT_RUNTIMES)),1)
+    # If we only have one runtime, we can strip classes.dex by default during dex_preopt
+    DEX_PREOPT_DEFAULT := true
+  else
+  # If we have more than one, we leave the classes.dex alone for post-boot analysis
+    DEX_PREOPT_DEFAULT := nostripping
+  endif
+endif
 
 #############################################################################
 
@@ -331,6 +375,41 @@ endif
 # The optional :<owner> is used to indicate the owner of a vendor file.
 PRODUCT_COPY_FILES := \
     $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_COPY_FILES))
+_boot_animation := $(strip $(lastword $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_BOOTANIMATION)))
+ifneq ($(_boot_animation),)
+PRODUCT_COPY_FILES += \
+    $(_boot_animation):system/media/bootanimation.zip
+endif
+_boot_animation :=
+
+# We might want to skip items listed in PRODUCT_COPY_FILES for
+# various reasons. This is useful for replacing a binary module with one
+# built from source. This should be a list of destination files under $OUT
+PRODUCT_COPY_FILES_OVERRIDES := \
+	$(addprefix %:, $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_COPY_FILES_OVERRIDES)))
+
+ifneq ($(PRODUCT_COPY_FILES_OVERRIDES),)
+    PRODUCT_COPY_FILES := $(filter-out $(PRODUCT_COPY_FILES_OVERRIDES), $(PRODUCT_COPY_FILES))
+endif
+
+.PHONY: listcopies
+listcopies:
+	@echo "Copy files: $(PRODUCT_COPY_FILES)"
+	@echo "Overrides: $(PRODUCT_COPY_FILES_OVERRIDES)"
+
+# We might want to skip items listed in PRODUCT_PACKAGES for
+# various reasons. This should be a list of packages
+PRODUCT_EXCLUDED_PACKAGES := \
+	$(addprefix %:, $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_EXCLUDED_PACKAGES)))
+
+ifneq ($(PRODUCT_EXCLUDED_PACKAGES),)
+    PRODUCT_PACKAGES := $(filter-out $(PRODUCT_EXCLUDED_PACKAGES), $(PRODUCT_PACKAGES))
+endif
+
+.PHONY: listpackages
+listpackages:
+	@echo "Packages: $(PRODUCT_PACKAGES)"
+	@echo "Excluded: $(PRODUCT_EXCLUDED_PACKAGES)"
 
 # A list of property assignments, like "key = value", with zero or more
 # whitespace characters on either side of the '='.
@@ -343,11 +422,17 @@ PRODUCT_PROPERTY_OVERRIDES := \
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES := \
     $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEFAULT_PROPERTY_OVERRIDES))
 
+PRODUCT_BUILD_PROP_OVERRIDES := \
+	$(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_BUILD_PROP_OVERRIDES))
+
 # Should we use the default resources or add any product specific overlays
 PRODUCT_PACKAGE_OVERLAYS := \
     $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGE_OVERLAYS))
 DEVICE_PACKAGE_OVERLAYS := \
         $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).DEVICE_PACKAGE_OVERLAYS))
+
+# An list of whitespace-separated words.
+PRODUCT_TAGS := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_TAGS))
 
 # The list of product-specific kernel header dirs
 PRODUCT_VENDOR_KERNEL_HEADERS := \
@@ -368,20 +453,6 @@ PRODUCT_OTA_PUBLIC_KEYS := $(sort \
 PRODUCT_EXTRA_RECOVERY_KEYS := $(sort \
     $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_EXTRA_RECOVERY_KEYS))
 
-PRODUCT_DEX_PREOPT_DEFAULT_FLAGS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_DEFAULT_FLAGS))
-PRODUCT_DEX_PREOPT_BOOT_FLAGS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_BOOT_FLAGS))
-# Resolve and setup per-module dex-preopot configs.
-PRODUCT_DEX_PREOPT_MODULE_CONFIGS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_MODULE_CONFIGS))
-# If a module has multiple setups, the first takes precedence.
-_pdpmc_modules :=
-$(foreach c,$(PRODUCT_DEX_PREOPT_MODULE_CONFIGS),\
-  $(eval m := $(firstword $(subst =,$(space),$(c))))\
-  $(if $(filter $(_pdpmc_modules),$(m)),,\
-    $(eval _pdpmc_modules += $(m))\
-    $(eval cf := $(patsubst $(m)=%,%,$(c)))\
-    $(eval cf := $(subst $(_PDPMC_SP_PLACE_HOLDER),$(space),$(cf)))\
-    $(eval DEXPREOPT.$(TARGET_PRODUCT).$(m).CONFIG := $(cf))))
-_pdpmc_modules :=
+# If there is no room in /system for the image, place it in /data
+PRODUCT_DEX_PREOPT_IMAGE_IN_DATA := \
+    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_IMAGE_IN_DATA))

@@ -27,6 +27,7 @@
 # A mapping from shorthand names to include directories.
 #
 pathmap_INCL := \
+    bootloader:bootable/bootloader/legacy/include \
     camera:system/media/camera/include \
     frameworks-base:frameworks/base/include \
     frameworks-native:frameworks/native/include \
@@ -63,6 +64,36 @@ define include-path-for
 $(foreach n,$(1),$(patsubst $(n):%,%,$(filter $(n):%,$(pathmap_INCL))))
 endef
 
+# Enter project path into pathmap
+#
+# $(1): name
+# $(2): path
+#
+define project-set-path
+$(eval pathmap_PROJ += $(1):$(2))
+endef
+
+# Enter variant project path into pathmap
+#
+# $(1): name
+# $(2): variable to check
+# $(3): base path
+#
+define project-set-path-variant
+    $(call project-set-path,$(1),$(strip \
+        $(if $($(2)), \
+            $(3)-$($(2)), \
+            $(3))))
+endef
+
+# Returns the path to the requested module's include directory,
+# relative to the root of the source tree.
+#
+# $(1): a list of modules (or other named entities) to find the projects for
+define project-path-for
+$(foreach n,$(1),$(patsubst $(n):%,%,$(filter $(n):%,$(pathmap_PROJ))))
+endef
+
 #
 # Many modules expect to be able to say "#include <jni.h>",
 # so make it easy for them to find the correct path.
@@ -90,6 +121,7 @@ FRAMEWORKS_BASE_SUBDIRS := \
 	    wifi \
 	    keystore \
 	    rs \
+	    security-bridge \
 	 )
 
 #
@@ -108,9 +140,11 @@ FRAMEWORKS_SUPPORT_SUBDIRS := \
         annotations \
         v4 \
         v7/gridlayout \
+        v7/appcompat \
         v7/cardview \
         v7/mediarouter \
         v7/palette \
+        v7/recyclerview \
         v8/renderscript \
         v13 \
         v17/leanback \

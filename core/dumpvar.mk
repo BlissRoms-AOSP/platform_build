@@ -67,6 +67,7 @@ HOST_OS_EXTRA:=$(shell python -c "import platform; print(platform.platform())")
 $(info ============================================)
 $(info   PLATFORM_VERSION_CODENAME=$(PLATFORM_VERSION_CODENAME))
 $(info   PLATFORM_VERSION=$(PLATFORM_VERSION))
+$(info   BLISS_VERSION=$(BLISS_VERSION))
 $(info   TARGET_PRODUCT=$(TARGET_PRODUCT))
 $(info   TARGET_BUILD_VARIANT=$(TARGET_BUILD_VARIANT))
 $(info   TARGET_BUILD_TYPE=$(TARGET_BUILD_TYPE))
@@ -74,14 +75,76 @@ $(info   TARGET_BUILD_APPS=$(TARGET_BUILD_APPS))
 $(info   TARGET_ARCH=$(TARGET_ARCH))
 $(info   TARGET_ARCH_VARIANT=$(TARGET_ARCH_VARIANT))
 $(info   TARGET_CPU_VARIANT=$(TARGET_CPU_VARIANT))
-$(info   TARGET_2ND_ARCH=$(TARGET_2ND_ARCH))
-$(info   TARGET_2ND_ARCH_VARIANT=$(TARGET_2ND_ARCH_VARIANT))
-$(info   TARGET_2ND_CPU_VARIANT=$(TARGET_2ND_CPU_VARIANT))
+#tobitege: TARGET_GCC_VERSION instead of unused TARGET_TC_ROM:
+ifdef TARGET_GCC_VERSION
+$(info   TARGET_GCC_VERSION=$(TARGET_GCC_VERSION))
+else
+$(info   TARGET_GCC_VERSION=4.8)
+endif
+$(info   TARGET_NDK_GCC_VERSION=$(TARGET_NDK_GCC_VERSION))
+ifdef TARGET_TC_KERNEL
+$(info   TARGET_TC_KERNEL=$(TARGET_TC_KERNEL))
+else
+$(info   TARGET_TC_KERNEL DEFAULTING TO "4.8-sm"!)
+endif
+$(info   TARGET_TOOLS_PREFIX=$(TARGET_TOOLS_PREFIX))
+$(info   TARGET_TOOLCHAIN_ROOT=$(TARGET_TOOLCHAIN_ROOT))
+$(info   TARGET_CC=$($(combo_2nd_arch_prefix)TARGET_CC))
+ifdef GCC_OPTIMIZATION_LEVELS
+$(info   GCC_OPTIMIZATION_LEVELS=$(GCC_OPTIMIZATION_LEVELS))
+else
+$(info   GCC_OPTIMIZATION_LEVELS empty!)
+endif
+$(info   BUILD_ID=$(BUILD_ID))
+$(info   BUILD_USER=$(USER))
+$(info   BUILD_HOST=$(HOST_NAME))
 $(info   HOST_ARCH=$(HOST_ARCH))
 $(info   HOST_OS=$(HOST_OS))
 $(info   HOST_OS_EXTRA=$(HOST_OS_EXTRA))
 $(info   HOST_BUILD_TYPE=$(HOST_BUILD_TYPE))
-$(info   BUILD_ID=$(BUILD_ID))
+$(info   HOST_CC=$(HOST_CC))
+$(info   HOST_OUT_EXECUTABLES=$(HOST_OUT_EXECUTABLES))
 $(info   OUT_DIR=$(OUT_DIR))
+
+ifdef BLISSIFY
+$(info   BLISSIFY=$(BLISSIFY))
+else
+$(info   BLISSIFY=false)
+endif
+ifdef BLISS_O3
+$(info   BLISS_O3=$(BLISS_O3))
+else
+$(info   BLISS_O3=false)
+endif
+ifeq (true,$(BLISS_GRAPHITE))
+$(info   BLISS_GRAPHITE=$(BLISS_GRAPHITE))
+else
+$(info   BLISS_GRAPHITE=false)
+endif
+ifdef BLISS_STRICT
+$(info   BLISS_STRICT=$(BLISS_STRICT))
+else
+$(info   BLISS_STRICT=false)
+endif
+ifdef BLISS_KRAIT
+$(info   BLISS_KRAIT=$(BLISS_KRAIT))
+else
+$(info   BLISS_KRAIT=false)
+endif
+ifdef BLISS_PIPE
+$(info   BLISS_PIPE=$(BLISS_PIPE))
+else
+$(info   BLISS_PIPE=false)
+endif
+
+ifneq (,$(GCC_OPTIMIZATION_LEVELS))
+$(info   SM_AND_VERSION=$(SM_AND_VERSION))
+$(info   SM_KERNEL_VERSION=$(SM_KERNEL_VERSION))
+ADDITIONAL_BUILD_PROPERTIES += \
+    ro.sm.android=$(SM_AND_VERSION) \
+    ro.sm.kernel=$(SM_KERNEL_VERSION) \
+    ro.sm.flags=$(GCC_OPTIMIZATION_LEVELS)
+endif
+
 $(info ============================================)
 endif

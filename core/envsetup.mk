@@ -72,15 +72,24 @@ ifeq ($(HOST_OS),)
 $(error Unable to determine HOST_OS from uname -sm: $(UNAME)!)
 endif
 
+# TODO: Replace BUILD_HOST_64bit with a flag that forces 32-bit build,
+# after we default to 64-bit host build.
+ifeq (,$(BUILD_HOST_64bit))
+# Default to 32-bit-by-default multilib host build.
+HOST_PREFER_32_BIT := true
+endif
+
 # HOST_ARCH
 ifneq (,$(findstring x86_64,$(UNAME)))
   HOST_ARCH := x86_64
   HOST_2ND_ARCH := x86
   HOST_IS_64_BIT := true
-else
-ifneq (,$(findstring x86,$(UNAME)))
-$(error Building on a 32-bit x86 host is not supported: $(UNAME)!)
 endif
+
+ifeq ($(HOST_PREFER_32_BIT),true)
+SDK_HOST_ARCH := x86
+else
+SDK_HOST_ARCH := $(HOST_ARCH)
 endif
 
 BUILD_ARCH := $(HOST_ARCH)
@@ -207,7 +216,11 @@ endif
 
 ifeq (,$(strip $(OUT_DIR)))
 ifeq (,$(strip $(OUT_DIR_COMMON_BASE)))
+ifneq ($(TOPDIR),)
 OUT_DIR := $(TOPDIR)out
+else
+OUT_DIR := $(CURDIR)/out
+endif
 else
 OUT_DIR := $(OUT_DIR_COMMON_BASE)/$(notdir $(PWD))
 endif
@@ -265,6 +278,7 @@ $(HOST_2ND_ARCH_VAR_PREFIX)HOST_OUT_INTERMEDIATES := $(HOST_OUT)/obj32
 $(HOST_2ND_ARCH_VAR_PREFIX)HOST_OUT_INTERMEDIATE_LIBRARIES := $($(HOST_2ND_ARCH_VAR_PREFIX)HOST_OUT_INTERMEDIATES)/lib
 $(HOST_2ND_ARCH_VAR_PREFIX)HOST_OUT_SHARED_LIBRARIES := $(HOST_OUT)/lib
 $(HOST_2ND_ARCH_VAR_PREFIX)HOST_OUT_EXECUTABLES := $(HOST_OUT_EXECUTABLES)
+$(HOST_2ND_ARCH_VAR_PREFIX)HOST_OUT_JAVA_LIBRARIES := $(HOST_OUT_JAVA_LIBRARIES)
 
 # The default host library path.
 # It always points to the path where we build libraries in the default bitness.
@@ -351,7 +365,7 @@ $(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_VENDOR_APPS := $(TARGET_OUT_VENDOR_APPS)
 
 TARGET_OUT_OEM := $(PRODUCT_OUT)/$(TARGET_COPY_OUT_OEM)
 TARGET_OUT_OEM_EXECUTABLES := $(TARGET_OUT_OEM)/bin
-ifeq ($(TARGET_IS_64_BIT),true)
+ifneq ($(filter %64,$(TARGET_ARCH)),)
 TARGET_OUT_OEM_SHARED_LIBRARIES := $(TARGET_OUT_OEM)/lib64
 else
 TARGET_OUT_OEM_SHARED_LIBRARIES := $(TARGET_OUT_OEM)/lib
@@ -404,6 +418,8 @@ TARGET_INSTALLER_OUT := $(PRODUCT_OUT)/installer
 TARGET_INSTALLER_DATA_OUT := $(TARGET_INSTALLER_OUT)/data
 TARGET_INSTALLER_ROOT_OUT := $(TARGET_INSTALLER_OUT)/root
 TARGET_INSTALLER_SYSTEM_OUT := $(TARGET_INSTALLER_OUT)/root/system
+
+TARGET_FACTORY_RAMDISK_OUT := $(PRODUCT_OUT)/factory_ramdisk
 
 COMMON_MODULE_CLASSES := TARGET-NOTICE_FILES HOST-NOTICE_FILES HOST-JAVA_LIBRARIES
 

@@ -70,8 +70,10 @@ CLEAR_VARS:= $(BUILD_SYSTEM)/clear_vars.mk
 BUILD_HOST_STATIC_LIBRARY:= $(BUILD_SYSTEM)/host_static_library.mk
 BUILD_HOST_SHARED_LIBRARY:= $(BUILD_SYSTEM)/host_shared_library.mk
 BUILD_STATIC_LIBRARY:= $(BUILD_SYSTEM)/static_library.mk
+BUILD_RAW_STATIC_LIBRARY := $(BUILD_SYSTEM)/raw_static_library.mk
 BUILD_SHARED_LIBRARY:= $(BUILD_SYSTEM)/shared_library.mk
 BUILD_EXECUTABLE:= $(BUILD_SYSTEM)/executable.mk
+BUILD_RAW_EXECUTABLE:= $(BUILD_SYSTEM)/raw_executable.mk
 BUILD_HOST_EXECUTABLE:= $(BUILD_SYSTEM)/host_executable.mk
 BUILD_PACKAGE:= $(BUILD_SYSTEM)/package.mk
 BUILD_PHONY_PACKAGE:= $(BUILD_SYSTEM)/phony_package.mk
@@ -97,6 +99,8 @@ BUILD_HOST_DALVIK_JAVA_LIBRARY := $(BUILD_SYSTEM)/host_dalvik_java_library.mk
 BUILD_HOST_DALVIK_STATIC_JAVA_LIBRARY := $(BUILD_SYSTEM)/host_dalvik_static_java_library.mk
 
 
+-include cts/build/config.mk
+
 # ###############################################################
 # Parse out any modifier targets.
 # ###############################################################
@@ -118,9 +122,10 @@ COMMON_RELEASE_CFLAGS:= -DNDEBUG -UDEBUG
 COMMON_GLOBAL_CPPFLAGS:= $(COMMON_GLOBAL_CFLAGS) -Wsign-promo -std=gnu++11
 COMMON_RELEASE_CPPFLAGS:= $(COMMON_RELEASE_CFLAGS)
 
-GLOBAL_CFLAGS_NO_OVERRIDE :=  \
-    -Werror=int-to-pointer-cast \
-    -Werror=pointer-to-int-cast \
+GLOBAL_CFLAGS_NO_OVERRIDE :=  
+#	\
+#    -Werror=int-to-pointer-cast \
+#    -Werror=pointer-to-int-cast \
 
 GLOBAL_CPPFLAGS_NO_OVERRIDE :=
 
@@ -137,6 +142,9 @@ JAVA_TMPDIR_ARG := -Djava.io.tmpdir=$(TMPDIR)
 else
 JAVA_TMPDIR_ARG :=
 endif
+
+# TODO: do symbol compression
+TARGET_COMPRESS_MODULE_SYMBOLS := false
 
 # ###############################################################
 # Include sub-configuration files
@@ -161,6 +169,11 @@ include $(BUILD_SYSTEM)/envsetup.mk
 # See envsetup.mk for a description of SCAN_EXCLUDE_DIRS
 FIND_LEAVES_EXCLUDES := $(addprefix --prune=, $(OUT_DIR) $(SCAN_EXCLUDE_DIRS) .repo .git)
 
+# General entries for project pathmap.  Any entries listed here should
+# be device and hardware independent.
+$(call project-set-path-variant,recovery,RECOVERY_VARIANT,bootable/recovery)
+
+-include vendor/extra/BoardConfigExtra.mk
 # The build system exposes several variables for where to find the kernel
 # headers:
 #   TARGET_DEVICE_KERNEL_HEADERS is automatically created for the current
@@ -384,7 +397,11 @@ JACK_LAUNCHER_JAR := $(HOST_OUT_JAVA_LIBRARIES)/jack-launcher.jar
 JILL_JAR := $(HOST_OUT_JAVA_LIBRARIES)/jill.jar
 JACK_MULTIDEX_DEFAULT_PREPROCESSOR := frameworks/multidex/library/resources/JACK-INF/legacyMultidexInstallation.jpp
 
-LEX := prebuilts/misc/$(BUILD_OS)-$(HOST_PREBUILT_ARCH)/flex/flex-2.5.39
+ifeq ($(USE_HOST_LEX),yes)
+    LEX := flex
+else
+    LEX := prebuilts/misc/$(BUILD_OS)-$(HOST_PREBUILT_ARCH)/flex/flex-2.5.39
+endif
 # The default PKGDATADIR built in the prebuilt bison is a relative path
 # external/bison/data.
 # To run bison from elsewhere you need to set up enviromental variable
@@ -407,8 +424,11 @@ MKBOOTIMG := $(HOST_OUT_EXECUTABLES)/mkbootimg$(HOST_EXECUTABLE_SUFFIX)
 else
 MKBOOTIMG := $(BOARD_CUSTOM_MKBOOTIMG)
 endif
+MKYAFFS2 := $(HOST_OUT_EXECUTABLES)/mkyaffs2image$(HOST_EXECUTABLE_SUFFIX)
 APICHECK := $(HOST_OUT_EXECUTABLES)/apicheck$(HOST_EXECUTABLE_SUFFIX)
+MKIMAGE :=  $(HOST_OUT_EXECUTABLES)/mkimage$(HOST_EXECUTABLE_SUFFIX)
 FS_GET_STATS := $(HOST_OUT_EXECUTABLES)/fs_get_stats$(HOST_EXECUTABLE_SUFFIX)
+MKEXT2IMG := $(HOST_OUT_EXECUTABLES)/genext2fs$(HOST_EXECUTABLE_SUFFIX)
 MAKE_EXT4FS := $(HOST_OUT_EXECUTABLES)/make_ext4fs$(HOST_EXECUTABLE_SUFFIX)
 MKEXTUSERIMG := $(HOST_OUT_EXECUTABLES)/mkuserimg.sh
 ifeq ($(HOST_OS),linux)
@@ -420,6 +440,7 @@ MKSQUASHFSUSERIMG :=
 endif
 MAKE_F2FS := $(HOST_OUT_EXECUTABLES)/make_f2fs$(HOST_EXECUTABLE_SUFFIX)
 MKF2FSUSERIMG := $(HOST_OUT_EXECUTABLES)/mkf2fsuserimg.sh
+MKEXT2BOOTIMG := external/genext2fs/mkbootimg_ext2.sh
 SIMG2IMG := $(HOST_OUT_EXECUTABLES)/simg2img$(HOST_EXECUTABLE_SUFFIX)
 IMG2SIMG := $(HOST_OUT_EXECUTABLES)/img2simg$(HOST_EXECUTABLE_SUFFIX)
 E2FSCK := $(HOST_OUT_EXECUTABLES)/e2fsck$(HOST_EXECUTABLE_SUFFIX)
@@ -457,7 +478,7 @@ endif
 ifneq ($(ANDROID_JACK_EXTRA_ARGS),)
 DEFAULT_JACK_EXTRA_ARGS := $(ANDROID_JACK_EXTRA_ARGS)
 else
-DEFAULT_JACK_EXTRA_ARGS := @$(BUILD_SYSTEM)/jack-default.args
+DEFAULT_JACK_EXTRA_ARGS := $(BUILD_SYSTEM)/jack-default.args
 endif
 # Turn off jack warnings by default.
 DEFAULT_JACK_EXTRA_ARGS += --verbose error
@@ -502,7 +523,17 @@ else
 COLUMN:= column
 endif
 
+ifeq ($(HOST_OS),darwin)
+ifeq ($(LEGACY_USE_JAVA6),)
 HOST_JDK_TOOLS_JAR:= $(shell $(BUILD_SYSTEM)/find-jdk-tools-jar.sh)
+else
+# Deliberately set to blank for Java 6 installations on MacOS. These
+# versions allegedly use a non-standard directory structure.
+HOST_JDK_TOOLS_JAR :=
+endif
+else
+HOST_JDK_TOOLS_JAR:= $(shell $(BUILD_SYSTEM)/find-jdk-tools-jar.sh)
+endif
 
 ifneq ($(HOST_JDK_TOOLS_JAR),)
 ifeq ($(wildcard $(HOST_JDK_TOOLS_JAR)),)
@@ -535,6 +566,9 @@ else
   DEFAULT_SYSTEM_DEV_CERTIFICATE := build/target/product/security/testkey
 endif
 
+# Rules for QCOM targets
+#include $(BUILD_SYSTEM)/qcom_target.mk
+
 # ###############################################################
 # Set up final options.
 # ###############################################################
@@ -555,7 +589,8 @@ HOST_GLOBAL_LD_DIRS += -L$(HOST_OUT_INTERMEDIATE_LIBRARIES)
 TARGET_GLOBAL_LD_DIRS += -L$(TARGET_OUT_INTERMEDIATE_LIBRARIES)
 
 HOST_PROJECT_INCLUDES:= $(SRC_HEADERS) $(SRC_HOST_HEADERS) $(HOST_OUT_HEADERS)
-TARGET_PROJECT_INCLUDES:= $(SRC_HEADERS) $(TARGET_OUT_HEADERS) \
+TARGET_PROJECT_INCLUDES:= $(SRC_HEADERS) $(TOPDIR)$(call project-path-for,ril)/include \
+		$(TARGET_OUT_HEADERS) \
 		$(TARGET_DEVICE_KERNEL_HEADERS) $(TARGET_BOARD_KERNEL_HEADERS) \
 		$(TARGET_PRODUCT_KERNEL_HEADERS)
 
@@ -600,23 +635,31 @@ ifeq ($(TARGET_DEFAULT_JAVA_LIBRARIES),)
   TARGET_DEFAULT_JAVA_LIBRARIES := core-libart core-junit ext framework
 endif
 
+TARGET_CPU_SMP ?= true
+
 # Flags for DEX2OAT
 DEX2OAT_TARGET_ARCH := $(TARGET_ARCH)
-ifeq ($(TARGET_CPU_VARIANT),)
-ifeq ($(TARGET_ARCH_VARIANT),)
-DEX2OAT_TARGET_CPU_VARIANT := default
-else
-DEX2OAT_TARGET_CPU_VARIANT := $(TARGET_ARCH_VARIANT)
-endif
-else
 DEX2OAT_TARGET_CPU_VARIANT := $(TARGET_CPU_VARIANT)
-endif
 DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES := default
+ifneq (,$(filter $(DEX2OAT_TARGET_CPU_VARIANT),cortex-a7 cortex-a15 krait denver generic cortex-a53))
+  DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES := div
+  ifneq (,$(filter $(DEX2OAT_TARGET_CPU_VARIANT),cortex-a53))
+    DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES += needfix_835769
+    DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES := $(subst $(space),$(comma),$(strip $(DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES)))
+  endif
+endif
 
 ifdef TARGET_2ND_ARCH
 $(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH := $(TARGET_2ND_ARCH)
 $(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_CPU_VARIANT := $(TARGET_2ND_CPU_VARIANT)
 $(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES := default
+ifneq (,$(filter $($(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_CPU_VARIANT),cortex-a7 cortex-a15 krait denver cortex-a53))
+  $(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES := div
+  ifneq (,$(filter $($(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_CPU_VARIANT),cortex-a53))
+    DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES += needfix_835769
+    DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES := $(subst $(space),$(comma),$(strip $(DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES)))
+  endif
+endif
 endif
 
 # define clang/llvm tools and global flags
@@ -680,6 +723,29 @@ ifeq (true,$(TARGET_IS_64_BIT))
 RS_PREBUILT_LIBPATH := -L prebuilts/ndk/9/platforms/android-21/arch-$(TARGET_ARCH)/usr/lib
 else
 RS_PREBUILT_LIBPATH := -L prebuilts/ndk/8/platforms/android-9/arch-$(TARGET_ARCH)/usr/lib
+endif
+
+# We might want to skip items listed in PRODUCT_COPY_FILES based on
+# various target flags. This is useful for replacing a binary module with one
+# built from source. This should be a list of destination files under $OUT
+#
+TARGET_COPY_FILES_OVERRIDES := \
+    $(addprefix %:, $(strip $(TARGET_COPY_FILES_OVERRIDES)))
+
+ifneq ($(TARGET_COPY_FILES_OVERRIDES),)
+    PRODUCT_COPY_FILES := $(filter-out $(TARGET_COPY_FILES_OVERRIDES), $(PRODUCT_COPY_FILES))
+endif
+
+ifneq ($(BLISS_BUILD),)
+## We need to be sure the global selinux policies are included
+## last, to avoid accidental resetting by device configs
+$(eval include vendor/bliss/sepolicy/sepolicy.mk)
+
+# Include any vendor specific config.mk file
+-include $(TOPDIR)vendor/*/build/core/config.mk
+
+# Include any vendor specific apicheck.mk file
+-include $(TOPDIR)vendor/*/build/core/apicheck.mk
 endif
 
 # API Level lists for Renderscript Compat lib.
